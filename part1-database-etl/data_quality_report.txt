@@ -1,0 +1,20 @@
+CUSTOMERS FILE
+Records processed: 25
+Duplicates removed: 1
+Rows removed due to missing PK: 0
+Missing values handled: 5
+Records loaded successfully: 24
+
+PRODUCTS FILE
+Records processed: 20
+Duplicates removed: 0
+Rows removed due to missing PK: 0
+Missing values handled: 4
+Records loaded successfully: 20
+
+SALES FILE
+Records processed: 40
+Duplicates removed: 1
+Rows removed due to missing PK: 5
+Missing values handled: 0
+Records loaded successfully: 34
