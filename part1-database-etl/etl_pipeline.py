@@ -4,8 +4,8 @@ from dateutil import parser
 import re
 import os
 
-# ===================== DB CONFIG =====================
-DB_CONFIG = {
+# ===================== DATABASE CONFIG =====================
+POSTGRES_CONFIG = {
     "dbname": "fleximart",
     "user": "postgres",
     "password": "abhi1310@",
@@ -13,56 +13,49 @@ DB_CONFIG = {
     "port": "5433"
 }
 
-# ===================== DATA QUALITY METRICS =====================
-report = {
-    "customers": {"processed": 0, "duplicates": 0, "pk_missing": 0, "loaded": 0},
-    "products": {"processed": 0, "duplicates": 0, "pk_missing": 0, "loaded": 0},
-    "sales": {"processed": 0, "duplicates": 0, "pk_missing": 0, "loaded": 0}
+# ===================== DATA QUALITY TRACKER =====================
+dq_metrics = {
+    "customers": {"total": 0, "duplicates": 0, "missing_pk": 0, "inserted": 0},
+    "products": {"total": 0, "duplicates": 0, "missing_pk": 0, "inserted": 0},
+    "sales": {"total": 0, "duplicates": 0, "missing_pk": 0, "inserted": 0}
 }
 
-# ===================== HELPERS =====================
-def standardize_phone(phone):
-    if pd.isna(phone):
+# ===================== UTILITY FUNCTIONS =====================
+def normalize_phone(value):
+    if pd.isna(value):
         return "N/A"
 
-    digits = re.sub(r"\D", "", str(phone))
+    digits = re.sub(r"\D", "", str(value))
 
     if digits.startswith("91") and len(digits) > 10:
         digits = digits[-10:]
     elif digits.startswith("0") and len(digits) > 10:
         digits = digits[-10:]
 
-    if len(digits) < 10:
-        return "N/A"
-
-    return "+91-" + digits
+    return "+91-" + digits if len(digits) == 10 else "N/A"
 
 
-def standardize_date(val):
+def normalize_date(value):
     try:
-        return parser.parse(str(val)).strftime("%Y-%m-%d")
-    except:
+        return parser.parse(str(value)).strftime("%Y-%m-%d")
+    except Exception:
         return "N/A"
 
 
-def clean_text(val):
-    if pd.isna(val):
-        return "N/A"
-    return str(val).strip()
+def clean_string(value):
+    return "N/A" if pd.isna(value) else str(value).strip()
 
 
-def title_text(val):
-    if pd.isna(val):
-        return "N/A"
-    return str(val).strip().title()
+def format_title(value):
+    return "N/A" if pd.isna(value) else str(value).strip().title()
 
 
-# ===================== CONNECT DB =====================
-conn = psycopg2.connect(**DB_CONFIG)
-cur = conn.cursor()
+# ===================== DB CONNECTION =====================
+connection = psycopg2.connect(**POSTGRES_CONFIG)
+cursor = connection.cursor()
 
-# ===================== CREATE TABLES =====================
-cur.execute("""
+# ===================== TABLE CREATION =====================
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS customers (
     customers_serialno SERIAL,
     customer_id VARCHAR(10) PRIMARY KEY,
@@ -75,7 +68,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 """)
 
-cur.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS products (
     products_serialno SERIAL,
     product_id VARCHAR(10) PRIMARY KEY,
@@ -86,7 +79,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 """)
 
-cur.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS orders (
     orders_serialno SERIAL,
     order_id VARCHAR(10) PRIMARY KEY,
@@ -98,7 +91,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 """)
 
-cur.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS order_items (
     order_items_serialno SERIAL,
     order_id VARCHAR(10),
@@ -111,142 +104,141 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 """)
 
-conn.commit()
+connection.commit()
 
-# =====================================================
-# ===================== CUSTOMERS ETL =================
-# =====================================================
-df = pd.read_csv("customers_raw.csv")
-report["customers"]["processed"] = len(df)
+# ==========================================================
+# ===================== CUSTOMERS LOAD =====================
+# ==========================================================
+cust_df = pd.read_csv("customers_raw.csv")
+dq_metrics["customers"]["total"] = len(cust_df)
 
-before = len(df)
-df = df[df["customer_id"].notna()]
-report["customers"]["pk_missing"] = before - len(df)
+before = len(cust_df)
+cust_df = cust_df[cust_df["customer_id"].notna()]
+dq_metrics["customers"]["missing_pk"] = before - len(cust_df)
 
-before = len(df)
-df.drop_duplicates(subset="customer_id", inplace=True)
-report["customers"]["duplicates"] = before - len(df)
+before = len(cust_df)
+cust_df.drop_duplicates(subset="customer_id", inplace=True)
+dq_metrics["customers"]["duplicates"] = before - len(cust_df)
 
-df["email"] = df["email"].fillna("N/A")
-df["phone"] = df["phone"].apply(standardize_phone)
-df["city"] = df["city"].apply(title_text)
-df["registration_date"] = df["registration_date"].apply(standardize_date)
+cust_df["email"] = cust_df["email"].fillna("N/A")
+cust_df["phone"] = cust_df["phone"].apply(normalize_phone)
+cust_df["city"] = cust_df["city"].apply(format_title)
+cust_df["registration_date"] = cust_df["registration_date"].apply(normalize_date)
 
-for _, r in df.iterrows():
-    cur.execute("""
+for _, row in cust_df.iterrows():
+    cursor.execute("""
         INSERT INTO customers
         (customer_id, first_name, last_name, email, phone, city, registration_date)
         VALUES (%s,%s,%s,%s,%s,%s,%s)
         ON CONFLICT (customer_id) DO NOTHING
-    """, tuple(r))
+    """, tuple(row))
 
-    if cur.rowcount == 1:
-        report["customers"]["loaded"] += 1
+    if cursor.rowcount == 1:
+        dq_metrics["customers"]["inserted"] += 1
 
-conn.commit()
+connection.commit()
 
-# =====================================================
-# ===================== PRODUCTS ETL ==================
-# =====================================================
-df = pd.read_csv("products_raw.csv")
-report["products"]["processed"] = len(df)
+# ==========================================================
+# ===================== PRODUCTS LOAD ======================
+# ==========================================================
+prod_df = pd.read_csv("products_raw.csv")
+dq_metrics["products"]["total"] = len(prod_df)
 
-before = len(df)
-df = df[df["product_id"].notna()]
-report["products"]["pk_missing"] = before - len(df)
+before = len(prod_df)
+prod_df = prod_df[prod_df["product_id"].notna()]
+dq_metrics["products"]["missing_pk"] = before - len(prod_df)
 
-before = len(df)
-df.drop_duplicates(subset="product_id", inplace=True)
-report["products"]["duplicates"] = before - len(df)
+before = len(prod_df)
+prod_df.drop_duplicates(subset="product_id", inplace=True)
+dq_metrics["products"]["duplicates"] = before - len(prod_df)
 
-df["product_name"] = df["product_name"].apply(clean_text)
-df["category"] = df["category"].apply(title_text)
-df["price"] = df["price"].fillna("N/A")
-df["stock_quantity"] = df["stock_quantity"].fillna("N/A")
+prod_df["product_name"] = prod_df["product_name"].apply(clean_string)
+prod_df["category"] = prod_df["category"].apply(format_title)
+prod_df["price"] = prod_df["price"].fillna("N/A")
+prod_df["stock_quantity"] = prod_df["stock_quantity"].fillna("N/A")
 
-for _, r in df.iterrows():
-    cur.execute("""
+for _, row in prod_df.iterrows():
+    cursor.execute("""
         INSERT INTO products
         (product_id, product_name, category, price, stock_quantity)
         VALUES (%s,%s,%s,%s,%s)
         ON CONFLICT (product_id) DO NOTHING
-    """, tuple(r))
+    """, tuple(row))
 
-    if cur.rowcount == 1:
-        report["products"]["loaded"] += 1
+    if cursor.rowcount == 1:
+        dq_metrics["products"]["inserted"] += 1
 
-conn.commit()
+connection.commit()
 
-# =====================================================
-# ===================== SALES ETL =====================
-# =====================================================
-df = pd.read_csv("sales_raw.csv")
-report["sales"]["processed"] = len(df)
+# ==========================================================
+# ===================== SALES LOAD =========================
+# ==========================================================
+sales_df = pd.read_csv("sales_raw.csv")
+dq_metrics["sales"]["total"] = len(sales_df)
 
-before = len(df)
-df = df[df["transaction_id"].notna()]
-report["sales"]["pk_missing"] = before - len(df)
+before = len(sales_df)
+sales_df = sales_df[sales_df["transaction_id"].notna()]
+dq_metrics["sales"]["missing_pk"] = before - len(sales_df)
 
-before = len(df)
-df.drop_duplicates(subset="transaction_id", inplace=True)
-report["sales"]["duplicates"] = before - len(df)
+before = len(sales_df)
+sales_df.drop_duplicates(subset="transaction_id", inplace=True)
+dq_metrics["sales"]["duplicates"] = before - len(sales_df)
 
-df["transaction_date"] = df["transaction_date"].apply(standardize_date)
+sales_df["transaction_date"] = sales_df["transaction_date"].apply(normalize_date)
 
-valid_customers = set(pd.read_sql("SELECT customer_id FROM customers", conn)["customer_id"])
-valid_products = set(pd.read_sql("SELECT product_id FROM products", conn)["product_id"])
+valid_customer_ids = set(pd.read_sql("SELECT customer_id FROM customers", connection)["customer_id"])
+valid_product_ids = set(pd.read_sql("SELECT product_id FROM products", connection)["product_id"])
 
-for _, r in df.iterrows():
+for _, row in sales_df.iterrows():
 
-    if r["customer_id"] not in valid_customers or r["product_id"] not in valid_products:
+    if row["customer_id"] not in valid_customer_ids or row["product_id"] not in valid_product_ids:
         continue
 
-    total = float(r["quantity"]) * float(r["unit_price"])
+    order_total = float(row["quantity"]) * float(row["unit_price"])
 
-    cur.execute("""
+    cursor.execute("""
         INSERT INTO orders
         (order_id, customer_id, order_date, total_amount, status)
         VALUES (%s,%s,%s,%s,%s)
         ON CONFLICT (order_id) DO NOTHING
     """, (
-        r["transaction_id"],
-        r["customer_id"],
-        r["transaction_date"],
-        str(total),
-        r["status"]
+        row["transaction_id"],
+        row["customer_id"],
+        row["transaction_date"],
+        str(order_total),
+        row["status"]
     ))
 
-    if cur.rowcount == 1:
-        cur.execute("""
+    if cursor.rowcount == 1:
+        cursor.execute("""
             INSERT INTO order_items
             (order_id, product_id, quantity, unit_price, subtotal)
             VALUES (%s,%s,%s,%s,%s)
         """, (
-            r["transaction_id"],
-            r["product_id"],
-            r["quantity"],
-            r["unit_price"],
-            str(total)
+            row["transaction_id"],
+            row["product_id"],
+            row["quantity"],
+            row["unit_price"],
+            str(order_total)
         ))
 
-        report["sales"]["loaded"] += 1
+        dq_metrics["sales"]["inserted"] += 1
 
-conn.commit()
+connection.commit()
 
-# =====================================================
-# ===================== REPORT ========================
-# =====================================================
-with open("data_quality_report.txt", "w") as f:
-    for table, m in report.items():
-        f.write(f"{table.upper()} FILE\n")
-        f.write(f"Records processed: {m['processed']}\n")
-        f.write(f"Duplicates removed: {m['duplicates']}\n")
-        f.write(f"Rows removed due to missing PK: {m['pk_missing']}\n")
-        f.write(f"Records loaded: {m['loaded']}\n\n")
+# ==========================================================
+# ===================== QUALITY REPORT =====================
+# ==========================================================
+with open("data_quality_report.txt", "w") as file:
+    for table, stats in dq_metrics.items():
+        file.write(f"{table.upper()} DATA\n")
+        file.write(f"Records processed: {stats['total']}\n")
+        file.write(f"Duplicate records removed: {stats['duplicates']}\n")
+        file.write(f"Rows with missing PK: {stats['missing_pk']}\n")
+        file.write(f"Records inserted: {stats['inserted']}\n\n")
 
+cursor.close()
+connection.close()
 
-cur.close()
-conn.close()
-
-print("ETL Completed Successfully")
-print("Data quality report created at:", report_path) # type: ignore
+print("ETL pipeline executed successfully")
+print("Data quality report generated")
