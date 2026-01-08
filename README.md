@@ -1,7 +1,7 @@
 # FlexiMart Data Architecture Project
 
-**Student Name:** Abhishek Sanjay Bade
-**Student ID:** bitsom_ba_25071860
+**Student Name:** Hrishikesh Sanjay Bade
+**Student ID:** bitsom_ba_25071235
 **Email:** justforstorages2022@gmail.com
 **Date:** 08/01/2025
 
@@ -10,20 +10,21 @@
 This project demonstrates the design and implementation of a complete data architecture for FlexiMart, covering transactional data processing, NoSQL analysis, and data warehousing. It includes building an ETL pipeline to clean and load operational data into a relational database, evaluating MongoDB for flexible product catalogs, and designing a star schema–based data warehouse to support analytical reporting and OLAP queries.
 
 ## Repository Structure
+
 ├── part1-database-etl/
-│   ├── etl_pipeline.py
-│   ├── schema_documentation.md
-│   ├── business_queries.sql
-│   └── data_quality_report.txt
+│ ├── etl_pipeline.py
+│ ├── schema_documentation.md
+│ ├── business_queries.sql
+│ └── data_quality_report.txt
 ├── part2-nosql/
-│   ├── nosql_analysis.md
-│   ├── mongodb_operations.js
-│   └── products_catalog.json
+│ ├── nosql_analysis.md
+│ ├── mongodb_operations.js
+│ └── products_catalog.json
 ├── part3-datawarehouse/
-│   ├── star_schema_design.md
-│   ├── warehouse_schema.sql
-│   ├── warehouse_data.sql
-│   └── analytics_queries.sql
+│ ├── star_schema_design.md
+│ ├── warehouse_schema.sql
+│ ├── warehouse_data.sql
+│ └── analytics_queries.sql
 └── README.md
 
 ## Technologies Used
@@ -81,3 +82,4 @@ Understanding when to use fixed schemas (PostgreSQL) versus flexible documents (
 3. Foreign key constraints in data warehouse loading
 Ensuring that all dimension keys existed before loading fact data required careful ordering and validation.
 
+```
